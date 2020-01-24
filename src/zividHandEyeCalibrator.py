@@ -11,14 +11,8 @@ import matplotlib.pyplot as plt
 import random
 from scipy import interpolate
 from utils import *
-'''
-TODO:
-	-interpolate centerpoint pixel coordinates in point cloud data
-	-write documentation for the class
-	-
-'''
-np.set_printoptions(suppress=True)
 
+np.set_printoptions(suppress=True)
 
 class ZividHEcalibrator(object):
     '''

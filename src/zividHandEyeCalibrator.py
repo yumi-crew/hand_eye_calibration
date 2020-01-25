@@ -14,6 +14,7 @@ from utils import *
 
 np.set_printoptions(suppress=True)
 
+
 class ZividHEcalibrator(object):
     '''
             Description of class functionality
@@ -45,25 +46,27 @@ class ZividHEcalibrator(object):
         self.HE_calib = None
         self.method = ''
 
-    def load_robot_poses(self, path: str):
+    def load_robot_poses(self, path: str, rot_repr = 'SO(3)'):
         print(f'Loading robot poses from ./{path}')
-        self.pose_files, self.robot_poses = load_t4s(path)
+        if rot_repr == 'SO(3)':
+            self.pose_files, self.robot_poses = load_t4s(path)
+        elif rot_repr =='quaternion':
+            self.pose_files, self.robot_poses = load_quat_poses(path)        
         if np.mean(self.robot_poses[0].t) < 1:
             print('converting from m to mm')
             for idx, _ in enumerate(self.robot_poses):
                 self.robot_poses[idx] = self.robot_poses[idx].to_mm()
-    ############
-    # NON PARALELLIZED METHOD FOR LOADING IMGS
 
+
+    # NON PARALELLIZED METHOD FOR LOADING IMGS
     def load_zdfs(self, path: str):
         print(f'Loading .zdf images from ./{path}')
         self.image_files = sorted(glob.glob(f'{path}/*.zdf'))
         self.images = [zivid.Frame(file) for file in self.image_files]
-        self.point_clouds = [image.get_point_cloud().to_array() for image in self.images]
+        self.point_clouds = [image.get_point_cloud().to_array()
+                             for image in self.images]
         self.num_imgs = len(self.point_clouds)
-    ############
 
-    ########################################################
     # PARALLELIZED METHODS FOR LOADING IMAGES
     def load_zdfs_parallel(self, folder_path: str):
         print(f'Loading .zdf images from ./{folder_path}')
@@ -73,7 +76,6 @@ class ZividHEcalibrator(object):
                          for file in self.image_files]
             self.point_clouds = [image.result() for image in imageData]
         self.num_imgs = len(self.point_clouds)
-    #########################################################
 
     def calculate_chessboard_poses_2D(self):
         '''
@@ -113,7 +115,7 @@ class ZividHEcalibrator(object):
         '''
         assert(len(self.point_clouds) > 0), 'No calibration images loaded'
         print('Calculating chessboard poses (3D)')
-        self.method = '3D'   
+        self.method = '3D'
         img_pts, obj_pts, self.XYZs, self.corners, self.rgbs, img_size = calibration_pts(
             self.nx, self.ny, self.square_size, self.point_clouds)
 
@@ -133,7 +135,7 @@ class ZividHEcalibrator(object):
         # use the xyz coordinates of the centerpoints to estimate the pose of the chessboard in the camera frame.
         # self.XYZs[imgNb][px, py] -> [x, y, z]
         # find the best fint plane P to each set of center points A, so that AP = 0
-        objectPlanes = []
+        
         for xyz, cps in zip(self.XYZs, self.center_points):
             xyz = xyz.transpose(1, 0, 2)
             A = np.zeros((cps.shape[0], 4))

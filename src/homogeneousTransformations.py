@@ -12,7 +12,7 @@ class HTransf(object):
             Class for representing and manipulating homogeneous transformation matrices in SE(3)
             constructor args: (a) angle, (k) axis, (t) translation,
             alternativly use the from_matrix() or from_vecs() methods to create a class object from an existing ndarray represeinting
-            a homogeneous transformation matrix in SE(3) 
+            a homogeneous transformation matrix in SE(3)
     """
 
     def __init__(self, a=0, k=np.array([1, 1, 1]), t=np.array([0, 0, 0])):
@@ -56,7 +56,7 @@ class HTransf(object):
             if(np.isclose(a, 0.0, rtol=1e-2)):
                 a = 0.0
                 return cls(t=t)
-            #print('regner ut k2')
+            # print('regner ut k2')
             k = (1.0/(2.0*np.sin(a))) * \
                 (np.array([m[2][1]-m[1][2], m[0][2]-m[2][0], m[1][0]-m[0][1]]))
         return cls(a, k, t)
@@ -83,17 +83,21 @@ class HTransf(object):
                       [0, 0, 0, 1]])
         return cls.from_matrix(m)
 
-    def to_kuka_pose(self):
-        m = self.rot_matrix
-        beta = np.arctan2(-m[2][0], np.sqrt(m[0][0]**2+m[1][0]**2))
-        alpha = np.arctan2(m[1][0], m[0][0])
-        gamma = np.arctan2(m[2][1], m[2][2])
-        return np.rad2deg(alpha), np.rad2deg(beta), np.rad2deg(gamma)
+    @classmethod
+    def from_quat_pose(cls, p):
+        # Q = [q1, q2, q3, q4] is a unit quaternion
+        # using formulas on p. 54 in Robotics, modelling and control by Siciliano et al.
+        # a = np.arccos(q1)/2
+        # k = np.sin(a/2) * np.array(q2, q3, q4)
 
-    def to_mm(self):
-        transmm = self.t*1000
-        angle, axis = self.angle_axis()
-        return HTransf(angle, axis, transmm)
+        x, y, z = p[0], p[1], p[2]
+        q1, q2, q3, q4 = p[3], p[4], p[5], p[6]
+
+        T = np.array([[2*(q1**2+q2**2)-1, 2*(q2*q3-q1*q4), 2*(q2*q4+q1*q3), x],
+                      [2*(q2*q3+q1*q4), 2*(q1**2+q3**2)-1, 2*(q3*q4-q1*q2), y],
+                      [2*(q2*q4-q1*q3), 2*(q3*q4+q1*q2), 2*(q1**2+q4**2)-1, z],
+                      [0, 0, 0, 1]])
+        return cls.from_matrix(T)
 
     def __str__(self):
         # defines what is printed when invocing the print() method on the object
@@ -120,6 +124,24 @@ class HTransf(object):
         if isinstance(other, np.ndarray):
             return self.matrix-other
         return self.matrix-other.matrix
+
+    def to_kuka_pose(self):
+        m = self.rot_matrix
+        beta = np.arctan2(-m[2][0], np.sqrt(m[0][0]**2+m[1][0]**2))
+        alpha = np.arctan2(m[1][0], m[0][0])
+        gamma = np.arctan2(m[2][1], m[2][2])
+        return np.rad2deg(alpha), np.rad2deg(beta), np.rad2deg(gamma)
+
+    def quat_pose(self):
+        q1 = np.cos(self.angle / 2)
+        Q = np.sin(self.angle / 2) * self.axis
+
+        return np.array([self.t[0], self.t[1], self.t[2], q1, Q[0], Q[1], Q[2]])
+
+    def to_mm(self):
+        transmm = self.t*1000
+        angle, axis = self.angle_axis()
+        return HTransf(angle, axis, transmm)
 
     def tr(self):
         return np.trace(self.matrix)
@@ -163,6 +185,8 @@ class HTransf(object):
 
 
 if __name__ == "__main__":
-    a = np.ones((3, 3))
-    print(a)
-    print(np.trace(a))
+    T = HTransf(np.pi/3, np.array([1, 0, 0]), np.array([1, 2, 3]))
+    print(T)
+    print(T.quat_pose())
+    H = HTransf.from_quat_pose(T.quat_pose())
+    print(H)

@@ -19,6 +19,13 @@ def load_t4s(path: str):
     return files, poses
 
 
+def load_quat_poses(path: str):
+    files = sorted(files=sorted(glob.glob(f'{path}/*.quat_pose')))
+    poses = [HT.from_quat_pose(np.fromfile(
+        pose_file, dtype=float, count=-1, sep=' ')) for pose_file in files]
+    return files, poses    
+
+
 def calibration_pts(nx: int, ny: int, square_size: float, pnt_clds: np.ndarray):
     rgbs = []
     corners = []
@@ -314,5 +321,4 @@ def plane_fit(pnt_cld: np.ndarray, nx: int, ny: int):
 
 
 if __name__ == '__main__':
-    res = interpolate_2D([1, 2, 3, 4], 0.01, 0.01)
-    print(res)
+    pass

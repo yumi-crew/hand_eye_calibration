@@ -16,7 +16,7 @@ if __name__ == '__main__':
     calibrator = ZividHEcalibrator(sqrSize=sq, nx=nx, ny=ny)
 
     calibrator.load_zdfs(folder)
-    calibrator.load_robot_poses(folder)
+    calibrator.load_robot_poses(folder, rot_repr='quaternion')
 
     calibrator.calculate_chessboard_poses_3D()
     calibrator.viz_cam_pose(focus='objectCentric')

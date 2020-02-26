@@ -20,7 +20,7 @@ class ZividHEcalibrator(object):
             Description of class functionality
     '''
 
-    def __init__(self, nx: int, ny: int, sqrSize: float):
+    def __init__(self, nx: int, ny: int, sqrSize: float, eye_in_hand: bool = True):
         self.app = zivid.Application()
         self.nx = nx
         self.ny = ny
@@ -45,20 +45,21 @@ class ZividHEcalibrator(object):
         self.tvecs = []
         self.HE_calib = None
         self.method = ''
+        self.eye_in_hand = eye_in_hand
 
-    def load_robot_poses(self, path: str, rot_repr = 'SO(3)'):
+    def load_robot_poses(self, path: str, rot_repr='SO(3)'):
         print(f'Loading robot poses from ./{path}')
         if rot_repr == 'SO(3)':
             self.pose_files, self.robot_poses = load_t4s(path)
-        elif rot_repr =='quaternion':
-            self.pose_files, self.robot_poses = load_quat_poses(path)        
+        elif rot_repr == 'quaternion':
+            self.pose_files, self.robot_poses = load_quat_poses(path)
         if np.mean(self.robot_poses[0].t) < 1:
             print('converting from m to mm')
             for idx, _ in enumerate(self.robot_poses):
                 self.robot_poses[idx] = self.robot_poses[idx].to_mm()
 
-
     # NON PARALELLIZED METHOD FOR LOADING IMGS
+
     def load_zdfs(self, path: str):
         print(f'Loading .zdf images from ./{path}')
         self.image_files = sorted(glob.glob(f'{path}/*.zdf'))
@@ -135,14 +136,14 @@ class ZividHEcalibrator(object):
         # use the xyz coordinates of the centerpoints to estimate the pose of the chessboard in the camera frame.
         # self.XYZs[imgNb][px, py] -> [x, y, z]
         # find the best fint plane P to each set of center points A, so that AP = 0
-        
+
         for xyz, cps in zip(self.XYZs, self.center_points):
             xyz = xyz.transpose(1, 0, 2)
             A = np.zeros((cps.shape[0], 4))
             A[:, 3] = 1
 
             for idx, row in enumerate(cps):
-                #A[idx, :3] = xyz[row[0], row[1]]
+                # A[idx, :3] = xyz[row[0], row[1]]
 
                 px, py = row[0], row[1]
 
@@ -156,10 +157,6 @@ class ZividHEcalibrator(object):
                 if y1 == y2:
                     y2 += 1
 
-                # XYZ1 = xyz[x1, y1]
-                # XYZ2 = xyz[x2, y1]
-                # XYZ3 = xyz[x1, y2]
-                # XYZ4 = xyz[x2, y2]
                 X, Y, Z = np.array([xyz[x1, y1],
                                     xyz[x2, y1],
                                     xyz[x1, y2],
@@ -308,7 +305,7 @@ class ZividHEcalibrator(object):
 
     def calculate_relative_poses(self, pose_pairs: int = -1, use_board_pts: bool = True):
         '''Calculates the relative transformation between all combinations of end-effector poses
-        and all corresponding combinations of camera poses.
+        and all corresponding combinations of camera/object poses (eye-in-hand/eye-in-base).
 
         Returns:
                 Ai : list of HTransf objects, transformations between end-effector poses
@@ -324,22 +321,39 @@ class ZividHEcalibrator(object):
         if pose_pairs < 3 or pose_pairs > self.num_imgs:
             pose_pairs = len(self.point_clouds)
         combinations = itertools.combinations(list(range(pose_pairs)), 2)
-
-        if self.method == '3D' and use_board_pts:
-            # use the xyz-object points on the chessboard to calculate relative camera poses
-            for first, second in combinations:
-                Ai.append(self.robot_poses[first].inv()
-                          @ self.robot_poses[second])
-                assert(self.board_points[first][:, :3].shape == self.board_points[second]
-                       [:, :3].shape), f'Nan points in image {first} or {second}'
-                Bi.append(pnt_cld_transf(
-                    self.board_points[first][:, :3], self.board_points[second][:, :3]))
+        if self.eye_in_hand:
+            if self.method == '3D' and use_board_pts:
+                # use the xyz-object points on the chessboard to calculate relative camera poses
+                for first, second in combinations:
+                    Ai.append(self.robot_poses[second].inv()
+                              @ self.robot_poses[first])
+                    assert(self.board_points[first][:, :3].shape == self.board_points[second]
+                           [:, :3].shape), f'Nan points in image {first} or {second}'
+                    Bi.append(pnt_cld_transf(
+                        self.board_points[second][:, :3], self.board_points[first][:, :3]))
+            else:
+                for first, second in combinations:
+                    Ai.append(self.robot_poses[second].inv()
+                              @ self.robot_poses[first])
+                    Bi.append(self.chessboard_poses[second]
+                              @ self.chessboard_poses[first].inv())
         else:
-            for first, second in combinations:
-                Ai.append(self.robot_poses[second].inv()
-                          @ self.robot_poses[first])
-                Bi.append(self.chessboard_poses[second]
-                          @ self.chessboard_poses[first].inv())
+            # cam-in-base
+            if self.method == '3D' and use_board_pts:
+                # use the xyz-object points on the chessboard to calculate relative camera poses
+                for first, second in combinations:
+                    Ai.append(self.robot_poses[second]
+                              @ self.robot_poses[first].inv())
+                    assert(self.board_points[first][:, :3].shape == self.board_points[second]
+                           [:, :3].shape), f'Nan points in image {first} or {second}'
+                    Bi.append(pnt_cld_transf(
+                        self.board_points[second][:, :3], self.board_points[first][:, :3]))
+            else:
+                for first, second in combinations:
+                    Ai.append(self.robot_poses[second]
+                              @ self.robot_poses[first].inv())
+                    Bi.append(self.chessboard_poses[second]
+                              @ self.chessboard_poses[first].inv())
 
         return Ai, Bi
 
@@ -426,11 +440,11 @@ if __name__ == '__main__':
                     [-0.977612, -0.180936, 0.107415, 291.177],
                     [0.0, 0.0, 0.0, 1]])
 
-    calibrator = zividHEcalibrator()
+    calibrator = ZividHEcalibrator(sqrSize=None, nx=None, ny=None)
     print('Fasit:\n', X_act)
-    T1 = calibrator.HEcalibration([HT.from_matrix(A11), HT.from_matrix(A22)], [
-                                  HT.from_matrix(B11), HT.from_matrix(B22)])
-    T2 = calibrator.HEcalibration([A1, A2], [B1, B2])
-    # calibrator.viz_HE_transf(T1)
-    print(T1, '\n', T2)
+    T1 = calibrator.HE_calibration([HT.from_matrix(A11), HT.from_matrix(A22)], [
+        HT.from_matrix(B11), HT.from_matrix(B22)])
+    T2 = calibrator.HE_calibration([A1, A2], [B1, B2])
+    calibrator.viz_HE_transf([T1])
+    print(T1, T2)
     plt.show()

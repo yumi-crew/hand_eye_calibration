@@ -13,16 +13,16 @@ if __name__ == '__main__':
     sq = 13.8
     nx = 20
     ny = 13
-    calibrator = ZividHEcalibrator(sqrSize=sq, nx=nx, ny=ny)
+    calibrator = ZividHEcalibrator(sqrSize=sq, nx=nx, ny=ny, eye_in_hand=True)
 
     calibrator.load_zdfs(folder)
-    calibrator.load_robot_poses(folder, rot_repr='quaternion')
+    calibrator.load_robot_poses(folder, rot_repr='SO(3)')
 
     calibrator.calculate_chessboard_poses_3D()
     calibrator.viz_cam_pose(focus='objectCentric')
     calibrator.viz_rob_pose()
     calibrationMatrices = []
-    
+
     Ai, Bi = calibrator.calculate_relative_poses(
         pose_pairs=-1, use_board_pts=True)
     calibrationMatrices.append(calibrator.HE_calibration(Ai, Bi))

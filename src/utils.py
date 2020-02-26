@@ -23,7 +23,7 @@ def load_quat_poses(path: str):
     files = sorted(files=sorted(glob.glob(f'{path}/*.quat_pose')))
     poses = [HT.from_quat_pose(np.fromfile(
         pose_file, dtype=float, count=-1, sep=' ')) for pose_file in files]
-    return files, poses    
+    return files, poses
 
 
 def calibration_pts(nx: int, ny: int, square_size: float, pnt_clds: np.ndarray):
@@ -93,10 +93,6 @@ def center_pts(corners: list, nx: int, ny: int, num_imgs: int):
         center_points[img_nb, :, :] = np.array(cps).reshape(-1, 2)
 
     return center_points
-    ###############
-    # temporary solution, until I get the xyz interpolation to work
-    # return np.round(center_points, 0).astype('int')
-    ###############
 
 
 def pnt_cld_transf(pnt_cld1: np.ndarray, pnt_cld2: np.ndarray):

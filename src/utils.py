@@ -20,7 +20,7 @@ def load_t4s(path: str):
 
 
 def load_quat_poses(path: str):
-    files = sorted(files=sorted(glob.glob(f'{path}/*.quat_pose')))
+    files = sorted(glob.glob(f'{path}/*.txt'))
     poses = [HT.from_quat_pose(np.fromfile(
         pose_file, dtype=float, count=-1, sep=' ')) for pose_file in files]
     return files, poses
@@ -142,11 +142,11 @@ def park_martin(A: list, B: list):
     d = np.zeros((3*len(B), 1))
     for i in range(0, len(A)*3, 3):
         C[i:i+3, :] = A[int(i/3)].rot_matrix - np.identity(3)
-        d[i:i+3, 0] = R_optimal @ B[int(i/3)].getTranslation() - \
-            A[int(i/3)].getTranslation()
+        d[i:i+3, 0] = R_optimal @ B[int(i/3)].get_translation() - \
+            A[int(i/3)].get_translation()
         C[i:i+3, :] = np.identity(3) - A[int(i/3)].rot_matrix
-        d[i:i+3, 0] = A[int(i/3)].getTranslation() - \
-            R_optimal @ B[int(i/3)].getTranslation()
+        d[i:i+3, 0] = A[int(i/3)].get_translation() - \
+            R_optimal @ B[int(i/3)].get_translation()
 
     t_optimal = np.linalg.lstsq(C, d, rcond=None)[0]
 
@@ -154,10 +154,21 @@ def park_martin(A: list, B: list):
     return HT(a, k, t_optimal)
 
 
-def calib_err_2D(hec, rob_poses: list, board_poses: list):
+def calib_err_2D(hec, rob_poses: list, board_poses: list, eye_in_hand=True):
+    '''Uses the variation in the constant transformation between
+        - robot base frame and object points for eye-in-hand calibration
+        - end-effector frame and object points for eye-in-base calibration
+        to calculate an estimate for the accuracy of the calibration.
+    '''
+    if eye_in_hand:
+        T_bo = np.array([(rob_pose @ hec @ board_pose).matrix for rob_pose, board_pose in
+                         zip(rob_poses, board_poses)]
+                        )
+    else:
+        T_bo = np.array([(rob_pose.inv() @ hec @ board_pose).matrix for rob_pose, board_pose in
+                         zip(rob_poses, board_poses)]
+                        )
 
-    T_bo = np.array([(rob_pose @ hec @ board_pose).matrix for rob_pose, board_pose in
-                     zip(rob_poses, board_poses)])
     mean_r = np.mean(np.array([HT.from_matrix(T).rvec()
                                for T in T_bo]), axis=0)
     mean_t = np.mean(T_bo[:, :3, 3], axis=0)
@@ -173,18 +184,30 @@ def calib_err_2D(hec, rob_poses: list, board_poses: list):
     return (np.mean(np.linalg.norm(trans_err, axis=1)), np.mean(np.abs(rot_err)))
 
 
-def calib_err_3D(hec, rob_poses: list, board_pts: list):
-    board_pts_in_base = np.array(
-        [rob_pose @ hec @ board_pnt.T for
-         rob_pose, board_pnt in zip(rob_poses, board_pts)]).transpose(0, 2, 1)
+def calib_err_3D(hec, rob_poses: list, board_pts: list, eye_in_hand=True):
+    '''Uses the variation in the constant transformation between
+        - robot base frame and object points for eye-in-hand calibration
+        - end-effector frame and object points for eye-in-base calibration
+        to calculate an estimate for the accuracy of the calibration.
+    '''
+    if eye_in_hand:
+        T_const = np.array(
+            [rob_pose @ hec @ board_pnt.T for
+             rob_pose, board_pnt in zip(rob_poses, board_pts)]
+        ).transpose(0, 2, 1)
+    else:
+        T_const = np.array(
+            [rob_pose.inv() @ hec @ board_pnt.T for
+             rob_pose, board_pnt in zip(rob_poses, board_pts)]
+        ).transpose(0, 2, 1)
 
-    mean_XYZ = np.mean(board_pts_in_base, axis=0)
+    mean_XYZ = np.mean(T_const, axis=0)
 
     trans_err = np.zeros((len(rob_poses), 3))
     rot_err = np.zeros((len(rob_poses)))
     for i in range(len(rob_poses)):
-        Terr = pnt_cld_transf(mean_XYZ[:, :3], board_pts_in_base[i, :, :3])
-        trans_err[i, :3] = Terr.t
+        Terr = pnt_cld_transf(mean_XYZ[:, : 3], T_const[i, :, : 3])
+        trans_err[i, : 3] = Terr.t
         rot_err[i] = np.rad2deg(Terr.angle_axis()[0])
 
     return (np.mean(np.linalg.norm(trans_err, axis=1)), np.mean(np.abs(rot_err)))
@@ -194,10 +217,6 @@ def interpolate_2D(f: list, xy: list, x: float, y: float):
     # algorithm found at https://en.wikipedia.org/wiki/Bilinear_interpolation
     f1, f2, f3, f4 = f
     x1, x2, y1, y2 = xy
-    # x1 = np.floor(px)
-    # x2 = np.ceil(px)
-    # y1 = np.floor(py)
-    # y2 = np.ceil(py)
 
     A = np.array([[1, x1, y1, x1*y1],
                   [1, x1, y2, x1*y2],
@@ -229,8 +248,8 @@ def generate_poses(n: int, noise_list: list):
     obj_pts = np.zeros((nx*ny, 4))
     obj_pts[:, 3] = 1
     # obj_pts[:, :2] = np.mgrid[0:nx, 0:ny].T.reshape(-1, 2)*20.0
-    obj_pts[:, :2] = np.mgrid[0:nx, 0:ny].T.reshape(-1, 2)*20.0
-    obj_pts[:, :3] = obj_pts[:, :3]-np.mean(obj_pts[:, :3], axis=0)
+    obj_pts[:, : 2] = np.mgrid[0: nx, 0: ny].T.reshape(-1, 2)*20.0
+    obj_pts[:, : 3] = obj_pts[:, : 3]-np.mean(obj_pts[:, : 3], axis=0)
     Ry_180 = HT(np.pi, np.array([0, 1, 0]))
 
     # chessboard_pts = cb_pose @ obj_pts.T
@@ -259,7 +278,7 @@ def generate_poses(n: int, noise_list: list):
         board_poses_plane = []
         for i in range(n):
             point_noise = np.zeros((4, nx*ny))
-            point_noise[:3, :] = noise*np.random.randn(3, nx*ny)
+            point_noise[: 3, :] = noise*np.random.randn(3, nx*ny)
             chessboard_pts = cb_pose @ (obj_pts + point_noise.T).T
 
             board_points.append(
@@ -284,14 +303,14 @@ def plane_fit(pnt_cld: np.ndarray, nx: int, ny: int):
 
     # best fit x:
     X = pnt_cld  # np.array(pnt_cld[:nx-1])
-    _, _, v = np.linalg.svd(X[:, :3] - np.mean(X[:, :3], axis=0))
+    _, _, v = np.linalg.svd(X[:, : 3] - np.mean(X[:, : 3], axis=0))
     x = v[0]/np.linalg.norm(v[0])
     # ensure x is pointing in the correct direction
-    if(np.isclose(x, -x_ctrl[0:3], rtol=0.1).any()):
+    if(np.isclose(x, -x_ctrl[0: 3], rtol=0.1).any()):
         x = -x
 
     # z-axis normal to chessboard plane, and unit vector
-    z = P[0:3]/np.linalg.norm(P[0:3])
+    z = P[0: 3]/np.linalg.norm(P[0: 3])
     # z = -v[2]/np.linalg.norm(v[2])
     # if z[2] > 0:
     #     z = -z
@@ -308,9 +327,9 @@ def plane_fit(pnt_cld: np.ndarray, nx: int, ny: int):
     #     z=-z
 
     T = np.zeros((4, 4))
-    T[:3, 0] = x[0:3]
-    T[:3, 1] = y[0:3]
-    T[:3, 2] = z[0:3]
+    T[: 3, 0] = x[0: 3]
+    T[: 3, 1] = y[0: 3]
+    T[: 3, 2] = z[0: 3]
     T[:, 3] = t
     T = HT.from_matrix(T)
     return T, P

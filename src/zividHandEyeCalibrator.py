@@ -177,7 +177,9 @@ class ZividHEcalibrator(object):
 
     def draw_coord_sys(self, imgNb: int):
         '''
-        Draws coordinate systems on the chessboard in the list self.rgbs corresponding to the index imgNb
+        Draws coordinate systems on the chessboard in the list self.rgbs corresponding to the index imgNb.
+        Requres the camera intrisics to be set in self.camera_matrix and self.dist_coeffs, 
+        use set_intrinsics() method
         Parameters: imgNb: int
         returns: img: ndarray
         '''
@@ -369,13 +371,12 @@ class ZividHEcalibrator(object):
         of the position and rotation estimates are printed.
         '''
 
-        X = self.HE_calib
         if self.method == '2D':
             trans_err, rot_err = calib_err_2D(
-                X, self.robot_poses, self.chessboard_poses)
+                self.HE_calib, self.robot_poses, self.chessboard_poses, eye_in_hand=self.eye_in_hand)
         else:
             trans_err, rot_err = calib_err_3D(
-                X, self.robot_poses, self.board_points)
+                self.HE_calib, self.robot_poses, self.board_points, eye_in_hand=self.eye_in_hand)
         print(trans_err, rot_err)
 
     def err_iter(self, plot=False):
@@ -390,13 +391,13 @@ class ZividHEcalibrator(object):
                     pose_pairs=i, use_board_pts=False)
                 hec = self.HE_calibration(Ai, Bi)
                 trans_err, rot_err = calib_err_2D(
-                    hec, self.robot_poses, self.chessboard_poses)
+                    hec, self.robot_poses, self.chessboard_poses, eye_in_hand=self.eye_in_hand)
             else:
                 Ai, Bi = self.calculate_relative_poses(
                     pose_pairs=i, use_board_pts=True)
                 hec = self.HE_calibration(Ai, Bi)
                 trans_err, rot_err = calib_err_3D(
-                    hec, self.robot_poses, self.board_points)
+                    hec, self.robot_poses, self.board_points, eye_in_hand=self.eye_in_hand)
             trans_errs.append(trans_err)
             rot_errs.append(rot_err)
 

@@ -85,8 +85,9 @@ class HTransf(object):
 
     @classmethod
     def from_quat_pose(cls, p):
-        # Q = [q1, q2, q3, q4] is a unit quaternion
-        # using formulas on p. 54 in Robotics, modelling and control by Siciliano et al.
+        # Q = [q1, q2, q3, q4] is a unit quaternion q1 is the scalar component,
+        # and q2, q3, q4 are the vector components
+        # using formulas on p. 54 in "Robotics, modelling and control" by Siciliano et al.
         # a = np.arccos(q1)/2
         # k = np.sin(a/2) * np.array(q2, q3, q4)
 
@@ -159,7 +160,7 @@ class HTransf(object):
         a, k = self.angle_axis()
         return a*k
 
-    def getTranslation(self):
+    def get_translation(self):
         return self.t
 
     def inv(self):
@@ -168,7 +169,7 @@ class HTransf(object):
         of the calling object'''
         return HTransf.from_matrix(np.linalg.inv(self.matrix))
 
-    def getMatrix(self):
+    def get_matrix(self):
         return self.matrix
 
     def confirm_SO3(self):

@@ -9,8 +9,8 @@ np.set_printoptions(suppress=True)
 
 if __name__ == '__main__':
 
-    folder = 'datasets/yumi_14-05-20'
-    calibrator = ZividHEcalibrator(sqrSize=5.5, nx=8, ny=5, eye_in_hand=False)
+    folder = 'datasets/yumi_28-02-20'
+    calibrator = ZividHEcalibrator(sqrSize=5, nx=8, ny=5, eye_in_hand=False)
 
     calibrator.load_zdfs(folder)
     calibrator.load_robot_poses(folder, rot_repr='quaternion')
@@ -19,13 +19,15 @@ if __name__ == '__main__':
         'intrinsics/camera_matrix_from_cam.txt', 'intrinsics/distortion_params_from_cam.txt')
 
 
+    
     calibrator.calculate_chessboard_poses_3D()
+    calibrator.method = '2D'
     calibrator.viz_cam_pose(focus='cameraCentric')
     calibrator.viz_rob_pose()
     calibrationMatrices = []
 
     Ai, Bi = calibrator.calculate_relative_poses(
-        pose_pairs=-1, use_board_pts=True)
+        pose_pairs=-1, use_board_pts=False)
     calibrationMatrices.append(calibrator.HE_calibration(Ai, Bi))
 
     print(f'HE calibration:\n{calibrationMatrices[-1]}')

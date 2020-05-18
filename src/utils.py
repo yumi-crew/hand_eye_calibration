@@ -71,7 +71,7 @@ def line_line_intersect(p1: float, p2: float, p3: float, p4: float):
 
 
 def center_pts(corners: list, nx: int, ny: int, num_imgs: int):
-    # the center point of each square is the average of the four surrounding corners
+    # the center point of each square is at the intersection of corner diagonals.
     center_points = np.zeros(
         (num_imgs, (nx-1)*(ny-1), 2))
     # corners is a list of all the corners for each image
@@ -171,27 +171,31 @@ def calib_err_2D(hec, rob_poses: list, board_poses: list, eye_in_hand=True):
 
     mean_r = np.mean(np.array([HT.from_matrix(T).rvec()
                                for T in T_bo]), axis=0)
-    mean_t = np.mean(T_bo[:, :3, 3], axis=0)
-    mean_board_pose = HT.from_vecs(mean_r, mean_t)
+    mean_theta = np.mean(np.array([HT.from_matrix(T).angle_axis()[0]
+                               for T in T_bo]))
+    mean_t=np.mean(T_bo[:, :3, 3], axis = 0)
+    mean_board_pose=HT.from_vecs(mean_r, mean_t)
 
-    trans_err = np.zeros((len(rob_poses), 3))
-    rot_err = np.zeros((len(rob_poses)))
+    trans_err=np.zeros((len(rob_poses), 3))
+    rot_err=np.zeros((len(rob_poses)))
+    theta_err=np.zeros((len(rob_poses)))
     for i in range(len(rob_poses)):
-        Terr = HT.from_matrix(mean_board_pose.inv() @ T_bo[i])
-        trans_err[i, :3] = Terr.t
-        rot_err[i] = np.rad2deg(Terr.angle_axis()[0])
+        Terr=HT.from_matrix(mean_board_pose.inv() @ T_bo[i])
+        trans_err[i, :3]=Terr.t
+        rot_err[i]=np.rad2deg(Terr.angle_axis()[0])
+        theta_err[i] = np.rad2deg(np.abs(HT.from_matrix(T_bo[i]).angle_axis()[0]-mean_theta))
 
-    return (np.mean(np.linalg.norm(trans_err, axis=1)), np.mean(np.abs(rot_err)))
+    return (np.mean(np.linalg.norm(trans_err, axis=1)), np.mean(np.abs(theta_err)))
 
 
-def calib_err_3D(hec, rob_poses: list, board_pts: list, eye_in_hand=True):
+def calib_err_3D(hec, rob_poses: list, board_pts: list, eye_in_hand = True):
     '''Uses the variation in the constant transformation between
         - robot base frame and object points for eye-in-hand calibration
         - end-effector frame and object points for eye-in-base calibration
         to calculate an estimate for the accuracy of the calibration.
     '''
     if eye_in_hand:
-        T_const = np.array(
+        T_const=np.array(
             [rob_pose @ hec @ board_pnt.T for
              rob_pose, board_pnt in zip(rob_poses, board_pts)]
         ).transpose(0, 2, 1)

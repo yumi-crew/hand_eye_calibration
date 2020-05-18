@@ -6,17 +6,18 @@ import matplotlib.pyplot as plt
 from utils import *
 
 np.set_printoptions(suppress=True)
+
 if __name__ == '__main__':
-    # 13.9
-    # folder = 'datasets/captures02-12-19'
-    folder = 'datasets/yumi_27-02-20'
-    calibrator = ZividHEcalibrator(sqrSize=10.0, nx=8, ny=5, eye_in_hand=False)
+
+    folder = 'datasets/yumi_14-05-20'
+    calibrator = ZividHEcalibrator(sqrSize=5.5, nx=8, ny=5, eye_in_hand=False)
 
     calibrator.load_zdfs(folder)
     calibrator.load_robot_poses(folder, rot_repr='quaternion')
 
     calibrator.set_intrinsics(
         'intrinsics/camera_matrix_from_cam.txt', 'intrinsics/distortion_params_from_cam.txt')
+
 
     calibrator.calculate_chessboard_poses_3D()
     calibrator.viz_cam_pose(focus='cameraCentric')
